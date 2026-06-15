@@ -1,6 +1,5 @@
 import asyncio
 import os
-import shlex
 import subprocess
 from pathlib import Path
 from .config import ALARM_RADIO_URL, DEFAULT_ALARM_VOLUME, AUDIO_DEVICE, AUDIO_MIXER_DEVICE, ALSA_MIXER
@@ -15,44 +14,38 @@ class AudioPlayer:
         self.radio_process = None
         self.volume = DEFAULT_ALARM_VOLUME
 
-    async def _run(self, command: str):
-        proc = await asyncio.create_subprocess_shell(
-            command,
+    async def _exec(self, *args: str):
+        return await asyncio.create_subprocess_exec(
+            *args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        return proc
 
     async def _set_volume(self, volume: int):
-        command = f"amixer -D {AUDIO_MIXER_DEVICE} sset '{ALSA_MIXER}' {volume}%"
-        proc = await self._run(command)
+        proc = await self._exec("amixer", "-D", AUDIO_MIXER_DEVICE, "sset", ALSA_MIXER, f"{volume}%")
         await proc.communicate()
 
     async def _run_volume(self, volume: int):
         try:
             await self._set_volume(volume)
         except Exception:
-            # Some HiFiBerry boards may not expose a Master mixer control on the same device.
             pass
-
-    async def start_radio(self, url: str = None):
-        if self.radio_process and self.radio_process.returncode is None:
-            return
-        await self._run_volume(DEFAULT_ALARM_VOLUME)
-        stream = url or ALARM_RADIO_URL
-        command = f"mpg123 -q -o alsa -a {shlex.quote(AUDIO_DEVICE)} {shlex.quote(stream)}"
-        self.radio_process = await self._run(command)
-        # If mpg123 exits within 0.5 s it failed (bad device, missing binary, etc.)
-        try:
-            await asyncio.wait_for(self.radio_process.wait(), timeout=0.5)
-        except asyncio.TimeoutError:
-            return  # Still running — good
-        stderr_bytes = await self.radio_process.stderr.read()
-        raise RuntimeError(f"mpg123 failed: {stderr_bytes.decode().strip()}")
 
     async def set_volume(self, volume: int):
         self.volume = max(0, min(100, volume))
         await self._set_volume(self.volume)
+
+    async def start_radio(self, url: str = None):
+        if self.radio_process and self.radio_process.returncode is None:
+            return
+        await self._run_volume(self.volume)
+        stream = url or ALARM_RADIO_URL
+        self.radio_process = await self._exec("mpg123", "-q", "-o", "alsa", "-a", AUDIO_DEVICE, stream)
+        # Give mpg123 a moment to fail fast on bad device/URL
+        await asyncio.sleep(0.5)
+        if self.radio_process.returncode is not None:
+            stderr_bytes = await self.radio_process.stderr.read()
+            raise RuntimeError(f"mpg123 failed: {stderr_bytes.decode().strip()}")
 
     async def stop_radio(self):
         if self.radio_process and self.radio_process.returncode is None:
@@ -61,14 +54,12 @@ class AudioPlayer:
             self.radio_process = None
 
     async def play_wav(self, wav_path: Path):
-        command = f"aplay -q -D {AUDIO_DEVICE} {shlex.quote(str(wav_path))}"
-        proc = await self._run(command)
+        proc = await self._exec("aplay", "-q", "-D", AUDIO_DEVICE, str(wav_path))
         await proc.communicate()
 
     async def play_message(self, text: str):
         wav_path = TMP_DIR / "tts_message.wav"
-        command = f"espeak-ng -w '{wav_path}' '{text}'"
-        proc = await self._run(command)
+        proc = await self._exec("espeak-ng", "-w", str(wav_path), text)
         await proc.communicate()
         if wav_path.exists():
             await self.play_wav(wav_path)
