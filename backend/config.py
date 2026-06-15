@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR.parent / ".env")
 DATA_DIR = BASE_DIR.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -37,4 +39,4 @@ DEFAULT_ALARM_VOLUME = int(os.getenv("DEFAULT_ALARM_VOLUME", "85"))
 ALARM_RADIO_URL = os.getenv("ALARM_RADIO_URL", "http://stream.live.vc.bbcmedia.co.uk/bbc_world_service")
 TEST_SPEAKER_URL = os.getenv("TEST_SPEAKER_URL", "http://stream-relay-geo.ntslive.net/stream")
 
-TIMEZONE = os.getenv("TIMEZONE", "UTC")
+TIMEZONE = os.getenv("TIMEZONE", "GMT")
