@@ -18,15 +18,7 @@ sudo apt update
 sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng alsa-utils
 ```
 
-2. Install Python dependencies:
-
-```bash
-cd /home/js2042/Documents/projects/SmartAlarmPi
-python3 -m venv venv
-source venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
+2. Install Python dependencies
 
 3. Initialize the database:
 
