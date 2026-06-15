@@ -6,7 +6,7 @@ DATA_DIR = BASE_DIR.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 AUDIO_DEVICE = os.getenv("AUDIO_DEVICE", "plughw:2,0")
-AUDIO_MIXER_DEVICE = os.getenv("AUDIO_MIXER_DEVICE", "hw:2")
+AUDIO_MIXER_DEVICE = os.getenv("AUDIO_MIXER_DEVICE", AUDIO_DEVICE)
 MPD_HOST = os.getenv("MPD_HOST", "localhost")
 MPD_PORT = int(os.getenv("MPD_PORT", "6600"))
 ALSA_MIXER = os.getenv("ALSA_MIXER", "Master")
