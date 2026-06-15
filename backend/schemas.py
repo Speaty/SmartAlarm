@@ -1,7 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class VolumeSet(BaseModel):
+    volume: int = Field(..., ge=0, le=100)
 
 
 class AlarmCreate(BaseModel):

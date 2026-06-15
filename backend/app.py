@@ -12,8 +12,8 @@ from .database import async_session, engine
 from .models import Alarm, Base as ORMBase
 from .scheduler import start_scheduler, schedule_alarm, remove_alarm_job, reload_alarms
 from .auth_routes import router as oauth_router
-from .schemas import AlarmCreate, AlarmRead, AlarmUpdate
-from .alarm_controller import stop_alarm, play_schedule_summary, test_speakers
+from .schemas import AlarmCreate, AlarmRead, AlarmUpdate, VolumeSet
+from .alarm_controller import stop_alarm, play_schedule_summary, test_speakers, get_volume, set_volume
 from .calendar_summary import calendar_summary_service
 from .calendar_admin import router as calendar_admin_router
 
@@ -102,6 +102,17 @@ async def api_test_speakers():
 
     await test_speakers(TEST_SPEAKER_URL)
     return {"status": "test_speakers_playing", "url": TEST_SPEAKER_URL}
+
+
+@app.get("/volume")
+async def api_get_volume():
+    return {"volume": await get_volume()}
+
+
+@app.post("/volume")
+async def api_set_volume(payload: VolumeSet):
+    await set_volume(payload.volume)
+    return {"volume": payload.volume}
 
 
 @app.get("/calendar/summary")

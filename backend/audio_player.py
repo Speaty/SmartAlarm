@@ -13,6 +13,7 @@ TMP_DIR.mkdir(exist_ok=True)
 class AudioPlayer:
     def __init__(self):
         self.radio_process = None
+        self.volume = DEFAULT_ALARM_VOLUME
 
     async def _run(self, command: str):
         proc = await asyncio.create_subprocess_shell(
@@ -48,6 +49,10 @@ class AudioPlayer:
             return  # Still running — good
         stderr_bytes = await self.radio_process.stderr.read()
         raise RuntimeError(f"mpg123 failed: {stderr_bytes.decode().strip()}")
+
+    async def set_volume(self, volume: int):
+        self.volume = max(0, min(100, volume))
+        await self._set_volume(self.volume)
 
     async def stop_radio(self):
         if self.radio_process and self.radio_process.returncode is None:
