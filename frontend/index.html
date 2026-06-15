@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartAlarmPi</title>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; margin: 0; padding: 0; background: #0f172a; color: #e2e8f0; }
+    .page { max-width: 860px; margin: 0 auto; padding: 2rem; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1rem; }
+    button { border: none; border-radius: 0.75rem; padding: 0.85rem 1.1rem; cursor: pointer; background: #2563eb; color: #fff; }
+    button.secondary { background: #475569; }
+    input, select { width: 100%; border-radius: 0.75rem; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; padding: 0.85rem; margin-top: 0.5rem; }
+    .row { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); }
+  </style>
+</head>
+<body x-data="alarmApp()">
+  <div class="page">
+    <h1>SmartAlarmPi</h1>
+    <section class="card">
+      <h2>Create Alarm</h2>
+      <div class="row">
+        <label>
+          Label
+          <input type="text" x-model="form.label" />
+        </label>
+        <label>
+          Cron expression
+          <input type="text" x-model="form.cron" placeholder="0 7 * * 1-5" />
+        </label>
+        <label>
+          Repeat weekly
+          <select x-model="form.repeat_weekly">
+            <option :value="true">Yes</option>
+            <option :value="false">No</option>
+          </select>
+        </label>
+      </div>
+      <button @click="createAlarm()">Save Alarm</button>
+      <p x-text="message"></p>
+    </section>
+
+    <section class="card">
+      <h2>Alarms</h2>
+      <template x-if="alarms.length">
+        <div>
+          <template x-for="alarm in alarms" :key="alarm.id">
+            <div class="card" style="background:#1f2937;">
+              <strong x-text="alarm.label"></strong>
+              <p x-text="alarm.cron"></p>
+              <p>Enabled: <span x-text="alarm.enabled ? 'Yes' : 'No'"></span></p>
+              <button @click="deleteAlarm(alarm.id)" class="secondary">Delete</button>
+            </div>
+          </template>
+        </div>
+      </template>
+      <p x-show="!alarms.length">No alarms yet.</p>
+    </section>
+
+    <section class="card">
+      <h2>Alarm Controls</h2>
+      <div class="row">
+        <button @click="stopAlarm()">Stop Alarm</button>
+        <button @click="playSummary()">Play Schedule Summary</button>
+      </div>
+      <p x-text="controlMessage"></p>
+    </section>
+
+    <section class="card">
+      <h2>Calendar</h2>
+      <div class="row">
+        <a href="/oauth/auth/google"><button>Connect Google Calendar</button></a>
+        <button @click="fetchCalendarSummary()">Refresh Summary</button>
+      </div>
+      <p x-text="calendarSummary"></p>
+    </section>
+  </div>
+
+  <script>
+    function alarmApp() {
+      return {
+        alarms: [],
+        message: '',
+        controlMessage: '',
+        form: { label: 'Morning', cron: '0 7 * * 1-5', repeat_weekly: true },
+        async fetchAlarms() {
+          const res = await fetch('/alarms');
+          this.alarms = await res.json();
+        },
+        async createAlarm() {
+          const res = await fetch('/alarms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.form),
+          });
+          if (res.ok) {
+            this.message = 'Alarm created';
+            this.form = { label: 'Morning', cron: '0 7 * * 1-5', repeat_weekly: true };
+            this.fetchAlarms();
+          } else {
+            this.message = 'Failed to create alarm';
+          }
+        },
+        async deleteAlarm(id) {
+          await fetch(`/alarms/${id}`, { method: 'DELETE' });
+          this.fetchAlarms();
+        },
+        async stopAlarm() {
+          const res = await fetch('/alarm/stop', { method: 'POST' });
+          this.controlMessage = res.ok ? 'Alarm stopped.' : 'Failed to stop alarm.';
+        },
+        async playSummary() {
+          const res = await fetch('/alarm/summary', { method: 'POST' });
+          this.controlMessage = res.ok ? 'Schedule summary is playing.' : 'Failed to play summary.';
+        },
+        async fetchCalendarSummary() {
+          const res = await fetch('/calendar/summary');
+          if (res.ok) {
+            const data = await res.json();
+            this.calendarSummary = data.summary;
+          } else {
+            this.calendarSummary = 'Unable to load calendar summary.';
+          }
+        },
+        init() {
+          this.fetchAlarms();
+          this.fetchCalendarSummary();
+        },
+      }
+    }
+  </script>
+</body>
+</html>
