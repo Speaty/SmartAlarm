@@ -4,12 +4,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
-from .audio_player import AudioPlayer
+from .audio_player import player
 from .database import async_session
 from .models import Alarm
 
 scheduler = AsyncIOScheduler(timezone="UTC")
-player = AudioPlayer()
 
 
 def schedule_alarm(alarm: Alarm):

@@ -1,10 +1,8 @@
 from typing import List
 
-from .audio_player import AudioPlayer
+from .audio_player import player
 from .tts_engine import TTSEngine
 from .calendar_sync import summarize_events
-
-player = AudioPlayer()
 
 
 async def trigger_alarm(message: str = None):

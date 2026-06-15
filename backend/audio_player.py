@@ -59,7 +59,13 @@ class AudioPlayer:
 
     async def play_message(self, text: str):
         wav_path = TMP_DIR / "tts_message.wav"
-        proc = await self._exec("espeak-ng", "-w", str(wav_path), text)
-        await proc.communicate()
+        try:
+            proc = await self._exec("espeak-ng", "-w", str(wav_path), text)
+            await proc.communicate()
+        except FileNotFoundError:
+            return
         if wav_path.exists():
             await self.play_wav(wav_path)
+
+
+player = AudioPlayer()
