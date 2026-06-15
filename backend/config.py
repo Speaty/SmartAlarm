@@ -12,7 +12,7 @@ ALSA_MIXER = os.getenv("ALSA_MIXER", "Master")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "alloy")
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'smartalarm.db'}")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{DATA_DIR / 'smartalarm.db'}")
 GOOGLE_CLIENT_SECRETS = BASE_DIR.parent / "secrets" / "google_client_secrets.json"
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 OUTLOOK_SCOPES = ["https://graph.microsoft.com/Calendars.Read"]
