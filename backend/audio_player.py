@@ -23,7 +23,7 @@ class AudioPlayer:
         return proc
 
     async def _set_volume(self, volume: int):
-        command = f"amixer -D default sset 'Master' {volume}%"
+        command = f"amixer -D {AUDIO_DEVICE} sset 'Master' {volume}%"
         proc = await self._run(command)
         await proc.communicate()
 
@@ -32,7 +32,7 @@ class AudioPlayer:
             return
         await self._set_volume(DEFAULT_ALARM_VOLUME)
         stream = url or ALARM_RADIO_URL
-        command = f"mpg123 -q '{stream}'"
+        command = f"mpg123 -q -o alsa -a {AUDIO_DEVICE} '{stream}'"
         self.radio_process = await self._run(command)
 
     async def stop_radio(self):
@@ -42,7 +42,7 @@ class AudioPlayer:
             self.radio_process = None
 
     async def play_wav(self, wav_path: Path):
-        command = f"aplay -q '{wav_path}'"
+        command = f"aplay -q -D {AUDIO_DEVICE} '{wav_path}'"
         proc = await self._run(command)
         await proc.communicate()
 
