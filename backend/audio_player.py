@@ -3,7 +3,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-from .config import ALARM_RADIO_URL, DEFAULT_ALARM_VOLUME, AUDIO_DEVICE, AUDIO_MIXER_DEVICE
+from .config import ALARM_RADIO_URL, DEFAULT_ALARM_VOLUME, AUDIO_DEVICE, AUDIO_MIXER_DEVICE, ALSA_MIXER
 
 BASE_DIR = Path(__file__).resolve().parent
 TMP_DIR = BASE_DIR.parent / "tmp"
@@ -41,6 +41,13 @@ class AudioPlayer:
         stream = url or ALARM_RADIO_URL
         command = f"mpg123 -q -o alsa -a {shlex.quote(AUDIO_DEVICE)} {shlex.quote(stream)}"
         self.radio_process = await self._run(command)
+        # If mpg123 exits within 0.5 s it failed (bad device, missing binary, etc.)
+        try:
+            await asyncio.wait_for(self.radio_process.wait(), timeout=0.5)
+        except asyncio.TimeoutError:
+            return  # Still running — good
+        stderr_bytes = await self.radio_process.stderr.read()
+        raise RuntimeError(f"mpg123 failed: {stderr_bytes.decode().strip()}")
 
     async def stop_radio(self):
         if self.radio_process and self.radio_process.returncode is None:
@@ -49,7 +56,7 @@ class AudioPlayer:
             self.radio_process = None
 
     async def play_wav(self, wav_path: Path):
-        command = f"aplay -q -D {AUDIO_DEVICE} '{wav_path}'"
+        command = f"aplay -q -D {AUDIO_DEVICE} {shlex.quote(str(wav_path))}"
         proc = await self._run(command)
         await proc.communicate()
 

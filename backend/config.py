@@ -9,7 +9,7 @@ AUDIO_DEVICE = os.getenv("AUDIO_DEVICE", "plughw:2,0")
 AUDIO_MIXER_DEVICE = os.getenv("AUDIO_MIXER_DEVICE", AUDIO_DEVICE)
 MPD_HOST = os.getenv("MPD_HOST", "localhost")
 MPD_PORT = int(os.getenv("MPD_PORT", "6600"))
-ALSA_MIXER = os.getenv("ALSA_MIXER", "Master")
+ALSA_MIXER = os.getenv("ALSA_MIXER", "Digital")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "alloy")
 
