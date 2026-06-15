@@ -1,6 +1,8 @@
 import asyncio
+from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
 from .audio_player import AudioPlayer
 from .database import async_session
@@ -11,12 +13,29 @@ player = AudioPlayer()
 
 
 def schedule_alarm(alarm: Alarm):
-    try:
-        trigger = CronTrigger.from_crontab(alarm.cron)
-    except ValueError:
+    """Schedule an alarm. If `repeat_weekly` is True, schedule a weekly cron at the
+    time and weekday of `scheduled_at`. Otherwise schedule a one-time `DateTrigger`.
+    """
+    if not alarm.scheduled_at:
         return
 
     job_id = f"alarm-{alarm.id}"
+
+    # Ensure scheduled_at is a datetime
+    dt: datetime = alarm.scheduled_at
+
+    if alarm.repeat_weekly:
+        # APScheduler expects day_of_week as 0-6 (mon-sun) or names; use weekday()
+        trigger = CronTrigger(
+            day_of_week=dt.weekday(),
+            hour=dt.hour,
+            minute=dt.minute,
+            second=dt.second,
+            timezone="UTC",
+        )
+    else:
+        trigger = DateTrigger(run_date=dt, timezone="UTC")
+
     scheduler.add_job(
         alarm_handler,
         trigger,

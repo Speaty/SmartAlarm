@@ -12,7 +12,7 @@ class Alarm(Base):
 
     id = Column(Integer, primary_key=True)
     label = Column(String(128), nullable=False, default="Alarm")
-    cron = Column(String(64), nullable=False)
+    scheduled_at = Column(DateTime, nullable=False)
     enabled = Column(Boolean, default=True)
     repeat_weekly = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

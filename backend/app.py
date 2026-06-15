@@ -13,7 +13,7 @@ from .models import Alarm, Base as ORMBase
 from .scheduler import start_scheduler, schedule_alarm, remove_alarm_job, reload_alarms
 from .auth_routes import router as oauth_router
 from .schemas import AlarmCreate, AlarmRead, AlarmUpdate
-from .alarm_controller import stop_alarm, play_schedule_summary
+from .alarm_controller import stop_alarm, play_schedule_summary, test_speakers
 from .calendar_summary import calendar_summary_service
 from .calendar_admin import router as calendar_admin_router
 
@@ -94,6 +94,14 @@ async def api_alarm_summary():
     summary = []
     await play_schedule_summary(summary)
     return {"status": "summary_playing"}
+
+
+@app.post("/alarm/test-speakers")
+async def api_test_speakers():
+    from .config import TEST_SPEAKER_URL
+
+    await test_speakers(TEST_SPEAKER_URL)
+    return {"status": "test_speakers_playing", "url": TEST_SPEAKER_URL}
 
 
 @app.get("/calendar/summary")

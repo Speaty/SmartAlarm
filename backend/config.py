@@ -23,5 +23,6 @@ FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
 DEFAULT_ALARM_VOLUME = int(os.getenv("DEFAULT_ALARM_VOLUME", "85"))
 ALARM_RADIO_URL = os.getenv("ALARM_RADIO_URL", "http://stream.live.vc.bbcmedia.co.uk/bbc_world_service")
+TEST_SPEAKER_URL = os.getenv("TEST_SPEAKER_URL", "http://stream-relay-geo.ntslive.net/stream")
 
 TIMEZONE = os.getenv("TIMEZONE", "UTC")

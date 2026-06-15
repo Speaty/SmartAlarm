@@ -26,8 +26,8 @@
           <input type="text" x-model="form.label" />
         </label>
         <label>
-          Cron expression
-          <input type="text" x-model="form.cron" placeholder="0 7 * * 1-5" />
+          Date & time
+          <input type="datetime-local" x-model="form.scheduled_at" />
         </label>
         <label>
           Repeat weekly
@@ -45,14 +45,14 @@
       <h2>Alarms</h2>
       <template x-if="alarms.length">
         <div>
-          <template x-for="alarm in alarms" :key="alarm.id">
-            <div class="card" style="background:#1f2937;">
-              <strong x-text="alarm.label"></strong>
-              <p x-text="alarm.cron"></p>
-              <p>Enabled: <span x-text="alarm.enabled ? 'Yes' : 'No'"></span></p>
-              <button @click="deleteAlarm(alarm.id)" class="secondary">Delete</button>
-            </div>
-          </template>
+            <template x-for="alarm in alarms" :key="alarm.id">
+              <div class="card" style="background:#1f2937;">
+                <strong x-text="alarm.label"></strong>
+                <p x-text="alarm.scheduled_at"></p>
+                <p>Enabled: <span x-text="alarm.enabled ? 'Yes' : 'No'"></span></p>
+                <button @click="deleteAlarm(alarm.id)" class="secondary">Delete</button>
+              </div>
+            </template>
         </div>
       </template>
       <p x-show="!alarms.length">No alarms yet.</p>
@@ -63,6 +63,8 @@
       <div class="row">
         <button @click="stopAlarm()">Stop Alarm</button>
         <button @click="playSummary()">Play Schedule Summary</button>
+        <button @click="testSpeakers()">Test Speakers</button>
+        <button @click="stopTest()" class="secondary">Stop Test</button>
       </div>
       <p x-text="controlMessage"></p>
     </section>
@@ -83,7 +85,7 @@
         alarms: [],
         message: '',
         controlMessage: '',
-        form: { label: 'Morning', cron: '0 7 * * 1-5', repeat_weekly: true },
+        form: { label: 'Morning', scheduled_at: new Date().toISOString().slice(0,16), repeat_weekly: true },
         async fetchAlarms() {
           const res = await fetch('/alarms');
           this.alarms = await res.json();
@@ -96,7 +98,7 @@
           });
           if (res.ok) {
             this.message = 'Alarm created';
-            this.form = { label: 'Morning', cron: '0 7 * * 1-5', repeat_weekly: true };
+            this.form = { label: 'Morning', scheduled_at: new Date().toISOString().slice(0,16), repeat_weekly: true };
             this.fetchAlarms();
           } else {
             this.message = 'Failed to create alarm';
@@ -113,6 +115,14 @@
         async playSummary() {
           const res = await fetch('/alarm/summary', { method: 'POST' });
           this.controlMessage = res.ok ? 'Schedule summary is playing.' : 'Failed to play summary.';
+        },
+        async testSpeakers() {
+          const res = await fetch('/alarm/test-speakers', { method: 'POST' });
+          this.controlMessage = res.ok ? 'NTS stream is playing.' : 'Failed to test speakers.';
+        },
+        async stopTest() {
+          const res = await fetch('/alarm/stop', { method: 'POST' });
+          this.controlMessage = res.ok ? 'Test stream stopped.' : 'Failed to stop test stream.';
         },
         async fetchCalendarSummary() {
           const res = await fetch('/calendar/summary');

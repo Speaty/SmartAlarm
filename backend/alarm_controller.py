@@ -17,6 +17,10 @@ async def stop_alarm():
     await player.stop_radio()
 
 
+async def test_speakers(url: str):
+    await player.start_radio(url)
+
+
 async def play_schedule_summary(events: List[dict]):
     summary = summarize_events(events)
     tts = TTSEngine()
