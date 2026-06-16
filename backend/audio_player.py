@@ -2,7 +2,7 @@ import asyncio
 import os
 import subprocess
 from pathlib import Path
-from .config import ALARM_RADIO_URL, DEFAULT_ALARM_VOLUME, AUDIO_DEVICE, AUDIO_MIXER_DEVICE, ALSA_MIXER
+from .config import ALARM_RADIO_URL, DEFAULT_ALARM_VOLUME, PIPEWIRE_SINK
 
 BASE_DIR = Path(__file__).resolve().parent
 TMP_DIR = BASE_DIR.parent / "tmp"
@@ -14,15 +14,16 @@ class AudioPlayer:
         self.radio_process = None
         self.volume = DEFAULT_ALARM_VOLUME
 
-    async def _exec(self, *args: str):
+    async def _exec(self, *args: str, env: dict = None):
         return await asyncio.create_subprocess_exec(
             *args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
 
     async def _set_volume(self, volume: int):
-        proc = await self._exec("amixer", "-D", AUDIO_MIXER_DEVICE, "sset", ALSA_MIXER, f"{volume}%")
+        proc = await self._exec("wpctl", "set-volume", PIPEWIRE_SINK, f"{volume / 100:.2f}")
         await proc.communicate()
 
     async def _run_volume(self, volume: int):
@@ -40,8 +41,10 @@ class AudioPlayer:
             return
         await self._run_volume(self.volume)
         stream = url or ALARM_RADIO_URL
-        self.radio_process = await self._exec("mpg123", "-q", "-o", "alsa", "-a", AUDIO_DEVICE, stream)
-        # Give mpg123 a moment to fail fast on bad device/URL
+        env = {**os.environ}
+        if PIPEWIRE_SINK != "@DEFAULT_AUDIO_SINK@":
+            env["PULSE_SINK"] = PIPEWIRE_SINK
+        self.radio_process = await self._exec("mpg123", "-q", "-o", "pulse", stream, env=env)
         await asyncio.sleep(0.5)
         if self.radio_process.returncode is not None:
             stderr_bytes = await self.radio_process.stderr.read()
@@ -54,7 +57,10 @@ class AudioPlayer:
             self.radio_process = None
 
     async def play_wav(self, wav_path: Path):
-        proc = await self._exec("aplay", "-q", "-D", AUDIO_DEVICE, str(wav_path))
+        args = ["pw-play", str(wav_path)]
+        if PIPEWIRE_SINK != "@DEFAULT_AUDIO_SINK@":
+            args = ["pw-play", "--target", PIPEWIRE_SINK, str(wav_path)]
+        proc = await self._exec(*args)
         await proc.communicate()
 
     async def play_message(self, text: str):

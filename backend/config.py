@@ -7,22 +7,9 @@ load_dotenv(BASE_DIR.parent / ".env")
 DATA_DIR = BASE_DIR.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-AUDIO_DEVICE = os.getenv("AUDIO_DEVICE", "plughw:2,0")
-
-
-def _pcm_to_ctl_device(pcm: str) -> str:
-    """Convert a PCM device string (plughw:X,Y or hw:X,Y) to an amixer control device (hw:X)."""
-    for prefix in ("plughw:", "hw:"):
-        if pcm.startswith(prefix):
-            card = pcm[len(prefix):].split(",")[0]
-            return f"hw:{card}"
-    return pcm
-
-
-AUDIO_MIXER_DEVICE = os.getenv("AUDIO_MIXER_DEVICE", _pcm_to_ctl_device(AUDIO_DEVICE))
+PIPEWIRE_SINK = os.getenv("PIPEWIRE_SINK", "@DEFAULT_AUDIO_SINK@")
 MPD_HOST = os.getenv("MPD_HOST", "localhost")
 MPD_PORT = int(os.getenv("MPD_PORT", "6600"))
-ALSA_MIXER = os.getenv("ALSA_MIXER", "Digital")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "alloy")
 
