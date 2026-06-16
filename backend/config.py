@@ -35,8 +35,8 @@ OUTLOOK_CLIENT_SECRET = os.getenv("OUTLOOK_CLIENT_SECRET")
 SECRET_KEY = os.getenv("SECRET_KEY", "changeme_local_secret")
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
-DEFAULT_ALARM_VOLUME = int(os.getenv("DEFAULT_ALARM_VOLUME", "85"))
-ALARM_RADIO_URL = os.getenv("ALARM_RADIO_URL", "http://stream.live.vc.bbcmedia.co.uk/bbc_world_service")
+DEFAULT_ALARM_VOLUME = int(os.getenv("DEFAULT_ALARM_VOLUME", "70"))
+ALARM_RADIO_URL = os.getenv("ALARM_RADIO_URL", "http://stream-relay-geo.ntslive.net/stream")
 TEST_SPEAKER_URL = os.getenv("TEST_SPEAKER_URL", "http://stream-relay-geo.ntslive.net/stream")
 
-TIMEZONE = os.getenv("TIMEZONE", "GMT")
+TIMEZONE = os.getenv("TIMEZONE", "Europe/London")

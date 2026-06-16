@@ -5,10 +5,11 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
 from .audio_player import player
+from .config import TIMEZONE
 from .database import async_session
 from .models import Alarm
 
-scheduler = AsyncIOScheduler(timezone="UTC")
+scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
 
 def schedule_alarm(alarm: Alarm):
@@ -30,10 +31,10 @@ def schedule_alarm(alarm: Alarm):
             hour=dt.hour,
             minute=dt.minute,
             second=dt.second,
-            timezone="UTC",
+            timezone=TIMEZONE,
         )
     else:
-        trigger = DateTrigger(run_date=dt, timezone="UTC")
+        trigger = DateTrigger(run_date=dt, timezone=TIMEZONE)
 
     scheduler.add_job(
         alarm_handler,
