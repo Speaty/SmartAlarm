@@ -17,6 +17,9 @@ CALENDAR_ICAL_URLS = [u.strip() for u in os.getenv("CALENDAR_ICAL_URLS", "").spl
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
 DEFAULT_ALARM_VOLUME = int(os.getenv("DEFAULT_ALARM_VOLUME", "70"))
+# Radio and speech levels (0-100) within the speaker volume
+DEFAULT_MUSIC_LEVEL = int(os.getenv("DEFAULT_MUSIC_LEVEL", "100"))
+DEFAULT_VOICE_LEVEL = int(os.getenv("DEFAULT_VOICE_LEVEL", "100"))
 ALARM_RADIO_URL = os.getenv("ALARM_RADIO_URL", "http://stream-relay-geo.ntslive.net/stream")
 TEST_SPEAKER_URL = os.getenv("TEST_SPEAKER_URL", "http://stream-relay-geo.ntslive.net/stream")
 

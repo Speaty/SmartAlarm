@@ -42,8 +42,11 @@ def reset_state(monkeypatch):
 @pytest.fixture(autouse=True)
 def player(monkeypatch):
     """Stub the shared audio player so no test shells out to mpg123/pw-play/espeak."""
-    for name in ("start_radio", "stop_radio", "play_message", "play_wav", "set_volume"):
+    for name in ("start_radio", "stop_radio", "play_message", "play_wav", "set_volume", "set_music_level"):
         monkeypatch.setattr(shared_player, name, AsyncMock())
+    monkeypatch.setattr(shared_player, "volume", 70)
+    monkeypatch.setattr(shared_player, "music_level", 100)
+    monkeypatch.setattr(shared_player, "voice_level", 100)
     return shared_player
 
 

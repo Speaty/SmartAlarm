@@ -36,12 +36,23 @@ async def stop_test():
     await player.stop_radio()
 
 
-async def get_volume() -> int:
-    return player.volume
+async def test_voice():
+    """Speak a short phrase over whatever is playing, to balance voice against music."""
+    await player.play_message("This is how loud the alarm voice will be.")
 
 
-async def set_volume(volume: int):
-    await player.set_volume(volume)
+def get_levels() -> dict:
+    return {"volume": player.volume, "music": player.music_level, "voice": player.voice_level}
+
+
+async def set_levels(volume: int = None, music: int = None, voice: int = None) -> dict:
+    if volume is not None:
+        await player.set_volume(volume)
+    if music is not None:
+        await player.set_music_level(music)
+    if voice is not None:
+        player.set_voice_level(voice)
+    return get_levels()
 
 
 async def play_schedule_summary():

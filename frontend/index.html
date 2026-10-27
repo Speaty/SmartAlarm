@@ -65,13 +65,23 @@
         <button @click="stopAlarm()">Stop Alarm</button>
         <button @click="playSummary()">Play Schedule Summary</button>
         <button @click="testSpeakers()">Test Speakers</button>
+        <button @click="testVoice()">Test Voice</button>
         <button @click="stopTest()" class="secondary">Stop Test</button>
       </div>
       <div style="margin-top: 1rem;">
         <label>
-          Volume: <strong x-text="volume + '%'"></strong>
-          <input type="range" min="0" max="100" step="1" x-model.number="volume" @change="setVolume(volume)" />
+          Volume: <strong x-text="levels.volume + '%'"></strong>
+          <input type="range" min="0" max="100" step="1" x-model.number="levels.volume" @change="setLevel('volume')" />
         </label>
+        <label>
+          Music: <strong x-text="levels.music + '%'"></strong>
+          <input type="range" min="0" max="100" step="1" x-model.number="levels.music" @change="setLevel('music')" />
+        </label>
+        <label>
+          Voice: <strong x-text="levels.voice + '%'"></strong>
+          <input type="range" min="0" max="100" step="1" x-model.number="levels.voice" @change="setLevel('voice')" />
+        </label>
+        <p style="color:#94a3b8; font-size:0.9rem;">Music and Voice balance the radio against speech; Volume sets the overall loudness. Start the speaker test, then use Test Voice to compare.</p>
       </div>
       <p x-text="controlMessage"></p>
     </section>
@@ -91,7 +101,7 @@
         alarms: [],
         message: '',
         controlMessage: '',
-        volume: 85,
+        levels: { volume: 70, music: 100, voice: 100 },
         form: { label: 'Morning', scheduled_at: new Date().toISOString().slice(0,16), repeat_weekly: true },
         async fetchAlarms() {
           const res = await fetch('/alarms');
@@ -136,20 +146,25 @@
           const res = await fetch('/alarm/test-speakers/stop', { method: 'POST' });
           this.controlMessage = res.ok ? 'Test stream stopped.' : 'Failed to stop test stream.';
         },
-        async fetchVolume() {
+        async testVoice() {
+          const res = await fetch('/alarm/test-voice', { method: 'POST' });
+          this.controlMessage = res.ok ? 'Voice test played.' : 'Failed to play voice test.';
+        },
+        async fetchLevels() {
           const res = await fetch('/volume');
           if (res.ok) {
-            const data = await res.json();
-            this.volume = data.volume;
+            this.levels = await res.json();
           }
         },
-        async setVolume(v) {
+        async setLevel(name) {
+          const value = this.levels[name];
           const res = await fetch('/volume', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ volume: v }),
+            body: JSON.stringify({ [name]: value }),
           });
-          this.controlMessage = res.ok ? `Volume set to ${v}%.` : 'Failed to set volume.';
+          const label = name[0].toUpperCase() + name.slice(1);
+          this.controlMessage = res.ok ? `${label} set to ${value}%.` : `Failed to set ${name}.`;
         },
         async fetchCalendarSummary() {
           const res = await fetch('/calendar/summary');
@@ -162,7 +177,7 @@
         },
         init() {
           this.fetchAlarms();
-          this.fetchVolume();
+          this.fetchLevels();
           this.fetchCalendarSummary();
         },
       }

@@ -5,7 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class VolumeSet(BaseModel):
-    volume: int = Field(..., ge=0, le=100)
+    """Any subset of the speaker volume and the music/voice levels within it."""
+
+    volume: Optional[int] = Field(None, ge=0, le=100)
+    music: Optional[int] = Field(None, ge=0, le=100)
+    voice: Optional[int] = Field(None, ge=0, le=100)
 
 
 class AlarmCreate(BaseModel):

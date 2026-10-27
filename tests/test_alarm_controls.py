@@ -110,15 +110,44 @@ async def test_test_speakers_starts_radio_with_test_url(client, player):
     player.start_radio.assert_awaited_once_with(TEST_SPEAKER_URL)
 
 
-async def test_set_volume(client, player):
-    response = await client.post("/volume", json={"volume": 40})
+async def test_get_levels(client):
+    response = await client.get("/volume")
 
-    assert response.json() == {"volume": 40}
+    assert response.json() == {"volume": 70, "music": 100, "voice": 100}
+
+
+async def test_set_speaker_volume_only(client, player):
+    await client.post("/volume", json={"volume": 40})
+
     player.set_volume.assert_awaited_once_with(40)
+    player.set_music_level.assert_not_awaited()
+    assert player.voice_level == 100
 
 
-@pytest.mark.parametrize("volume", [-1, 101])
-async def test_set_volume_rejects_out_of_range(client, volume):
-    response = await client.post("/volume", json={"volume": volume})
+async def test_set_music_level_only(client, player):
+    await client.post("/volume", json={"music": 50})
+
+    player.set_music_level.assert_awaited_once_with(50)
+    player.set_volume.assert_not_awaited()
+
+
+async def test_set_voice_level_returns_all_levels(client, player):
+    response = await client.post("/volume", json={"voice": 30})
+
+    assert response.json() == {"volume": 70, "music": 100, "voice": 30}
+
+
+@pytest.mark.parametrize("field", ["volume", "music", "voice"])
+@pytest.mark.parametrize("value", [-1, 101])
+async def test_levels_reject_out_of_range(client, field, value):
+    response = await client.post("/volume", json={field: value})
 
     assert response.status_code == 422
+
+
+async def test_voice_test_speaks_without_stopping_music(client, player):
+    response = await client.post("/alarm/test-voice")
+
+    assert response.status_code == 200
+    player.play_message.assert_awaited_once()
+    player.stop_radio.assert_not_awaited()

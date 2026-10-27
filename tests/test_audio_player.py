@@ -39,7 +39,7 @@ async def test_start_radio_sets_volume_then_plays_stream_via_pulse(fresh):
 
     wpctl, mpg123 = commands(fresh)
     assert wpctl[:3] == ("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@")
-    assert mpg123 == ("mpg123", "-q", "-o", "pulse", "http://stream")
+    assert mpg123 == ("mpg123", "-q", "-o", "pulse", "-f", "32768", "http://stream")
 
 
 async def test_start_radio_defaults_to_alarm_stream(fresh):
@@ -101,7 +101,7 @@ async def test_set_volume_clamps_and_converts_to_fraction(fresh, requested, expe
 async def test_play_wav_uses_default_sink(fresh, tmp_path):
     await fresh.play_wav(tmp_path / "a.wav")
 
-    assert commands(fresh)[-1] == ("pw-play", str(tmp_path / "a.wav"))
+    assert commands(fresh)[-1] == ("pw-play", "--volume", "1.00", str(tmp_path / "a.wav"))
 
 
 async def test_play_wav_targets_custom_sink(fresh, monkeypatch, tmp_path):
@@ -109,7 +109,9 @@ async def test_play_wav_targets_custom_sink(fresh, monkeypatch, tmp_path):
 
     await fresh.play_wav(tmp_path / "a.wav")
 
-    assert commands(fresh)[-1] == ("pw-play", "--target", "hifiberry", str(tmp_path / "a.wav"))
+    assert commands(fresh)[-1] == (
+        "pw-play", "--volume", "1.00", "--target", "hifiberry", str(tmp_path / "a.wav")
+    )
 
 
 async def test_play_message_renders_with_espeak_then_plays(fresh, monkeypatch, tmp_path):
@@ -129,3 +131,52 @@ async def test_play_message_is_silent_without_espeak(monkeypatch, tmp_path):
     p._exec = AsyncMock(side_effect=FileNotFoundError)
 
     await p.play_message("hello")  # must not raise
+
+
+# --- music / voice levels ---------------------------------------------------
+
+
+async def test_music_level_scales_mpg123_output(fresh):
+    await fresh.set_music_level(50)
+    await fresh.start_radio("http://stream")
+
+    mpg123 = commands(fresh)[-1]
+    assert mpg123[mpg123.index("-f") + 1] == "16384"
+
+
+async def test_changing_music_level_restarts_playing_stream_at_new_level(fresh):
+    await fresh.start_radio("http://stream")
+    first = fresh.radio_process
+    fresh.calls.clear()
+
+    await fresh.set_music_level(25)
+
+    first.kill.assert_called_once()
+    mpg123 = commands(fresh)[-1]
+    assert mpg123[-1] == "http://stream"
+    assert mpg123[mpg123.index("-f") + 1] == "8192"
+
+
+async def test_changing_music_level_while_stopped_starts_nothing(fresh):
+    await fresh.set_music_level(25)
+
+    assert fresh.calls == []
+    assert fresh.music_level == 25
+
+
+async def test_voice_level_sets_pw_play_stream_volume(fresh, tmp_path):
+    fresh.set_voice_level(40)
+
+    await fresh.play_wav(tmp_path / "a.wav")
+
+    play = commands(fresh)[-1]
+    assert play[play.index("--volume") + 1] == "0.40"
+
+
+@pytest.mark.parametrize("requested,expected", [(150, 100), (-5, 0)])
+async def test_levels_are_clamped(fresh, requested, expected):
+    await fresh.set_music_level(requested)
+    fresh.set_voice_level(requested)
+
+    assert fresh.music_level == expected
+    assert fresh.voice_level == expected

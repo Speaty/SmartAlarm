@@ -16,8 +16,9 @@ from .alarm_controller import (
     play_schedule_summary,
     test_speakers,
     stop_test,
-    get_volume,
-    set_volume,
+    test_voice,
+    get_levels,
+    set_levels,
 )
 from .calendar_summary import calendar_summary_service
 from .calendar_admin import router as calendar_admin_router
@@ -110,6 +111,12 @@ async def api_test_speakers():
     return {"status": "test_speakers_playing", "url": TEST_SPEAKER_URL}
 
 
+@app.post("/alarm/test-voice")
+async def api_test_voice():
+    await test_voice()
+    return {"status": "voice_test_played"}
+
+
 @app.post("/alarm/test-speakers/stop")
 async def api_stop_test_speakers():
     await stop_test()
@@ -118,13 +125,12 @@ async def api_stop_test_speakers():
 
 @app.get("/volume")
 async def api_get_volume():
-    return {"volume": await get_volume()}
+    return get_levels()
 
 
 @app.post("/volume")
 async def api_set_volume(payload: VolumeSet):
-    await set_volume(payload.volume)
-    return {"volume": payload.volume}
+    return await set_levels(**payload.model_dump(exclude_none=True))
 
 
 @app.get("/calendar/summary")
