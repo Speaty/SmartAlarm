@@ -53,6 +53,17 @@ http://localhost:5000/
 - Media playback goes through PipeWire: `mpg123 -o pulse` for internet radio, `pw-play` for WAV audio, and `wpctl` for volume.
 - For Raspberry Pi deployment, add the `smartalarm` user to `audio` and `gpio` groups.
 
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+pytest            # unit tests; audio, ElevenLabs and Google are faked
+pytest -m live    # real API calls; skipped unless credentials are present
+```
+
+The live tests need `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` in `.env` for ElevenLabs, and
+`secrets/google_client_secrets.json` plus a connected `data/smartalarm.db` for Google Calendar.
+
 ## Google Calendar setup
 
 1. Create a Google Cloud project at https://console.cloud.google.com/

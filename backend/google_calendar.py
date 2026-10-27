@@ -66,6 +66,7 @@ class GoogleCalendarService:
             client_id=client_config.get("client_id"),
             client_secret=client_config.get("client_secret"),
             scopes=token.scopes.split(",") if token.scopes else GOOGLE_SCOPES,
+            expiry=token.expires_at,
         )
         if creds.expired and creds.refresh_token:
             await asyncio.to_thread(creds.refresh, GoogleRequest())

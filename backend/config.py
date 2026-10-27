@@ -9,7 +9,7 @@ DATA_DIR.mkdir(exist_ok=True)
 
 PIPEWIRE_SINK = os.getenv("PIPEWIRE_SINK", "@DEFAULT_AUDIO_SINK@")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "alloy")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{DATA_DIR / 'smartalarm.db'}")
 GOOGLE_CLIENT_SECRETS = BASE_DIR.parent / "secrets" / "google_client_secrets.json"
