@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from backend import alarm_controller, tts_engine
-from backend.calendar_summary import calendar_summary_service
 from backend.tts_engine import TTSEngine
 
 EVENTS = [{"start": {"dateTime": "2099-01-05T09:00:00"}, "summary": "Standup"}]
@@ -27,8 +26,8 @@ async def test_stop_when_nothing_is_ringing_plays_no_summary(client, player):
     player.play_message.assert_not_awaited()
 
 
-async def test_stop_ringing_alarm_plays_calendar_summary_with_espeak(client, player):
-    calendar_summary_service.google_service.get_weekly_events.return_value = EVENTS
+async def test_stop_ringing_alarm_plays_calendar_summary_with_espeak(client, player, calendar):
+    calendar.return_value = EVENTS
     await ring()
     player.play_message.reset_mock()
 
@@ -63,9 +62,9 @@ async def test_summary_uses_elevenlabs_when_configured(client, player, monkeypat
     player.play_message.assert_not_awaited()
 
 
-async def test_summary_passes_calendar_text_to_elevenlabs(client, monkeypatch, tmp_path):
+async def test_summary_passes_calendar_text_to_elevenlabs(client, monkeypatch, tmp_path, calendar):
     enable_elevenlabs(monkeypatch)
-    calendar_summary_service.google_service.get_weekly_events.return_value = EVENTS
+    calendar.return_value = EVENTS
     seen = {}
 
     def fake_synthesize(self, text, path):

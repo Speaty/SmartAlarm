@@ -6,7 +6,7 @@ SmartAlarmPi is a Raspberry Pi smart alarm clock backend and lightweight web UI.
 - Schedule weekly or one-time alarms via a simple web UI
 - Play internet radio as the alarm source
 - Generate spoken messages via `espeak-ng` now, and later ElevenLabs TTS
-- Read your Google Calendar and speak a weekly summary when you stop the alarm (Outlook planned)
+- Read your calendar (any iCal feed: Google, Outlook, Apple) and speak a weekly summary when you stop the alarm
 - Run as a local Pi service with HiFiBerry audio support
 
 ## Getting started
@@ -57,17 +57,31 @@ http://localhost:5000/
 
 ```bash
 pip install -r requirements-dev.txt
-pytest            # unit tests; audio, ElevenLabs and Google are faked
+pytest            # unit tests; audio, ElevenLabs and the calendar are faked
 pytest -m live    # real API calls; skipped unless credentials are present
 ```
 
 The live tests need `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` in `.env` for ElevenLabs, and
-`secrets/google_client_secrets.json` plus a connected `data/smartalarm.db` for Google Calendar.
+`CALENDAR_ICAL_URLS` for the calendar.
 
-## Google Calendar setup
+## Calendar setup
 
-1. Create a Google Cloud project at https://console.cloud.google.com/
-2. Enable the Google Calendar API.
-3. Create OAuth 2.0 credentials and download the JSON client secret file.
-4. Save it as `secrets/google_client_secrets.json` in the repository root.
-5. Start the backend and visit `/oauth/auth/google` to connect your calendar.
+The schedule summary reads your calendar from its secret iCal address, so there is no sign-in or
+Google Cloud project to set up.
+
+1. In Google Calendar on the web, open **Settings**, pick your calendar under
+   **Settings for my calendars**, and go to **Integrate calendar**.
+2. Copy the **Secret address in iCal format** (it ends in `basic.ics`).
+3. Put it in `.env` on the Pi and restart the service:
+
+   ```
+   CALENDAR_ICAL_URLS=https://calendar.google.com/calendar/ical/.../private-.../basic.ics
+   ```
+
+   For several calendars, separate the URLs with commas. Outlook ("Publish calendar" → ICS link)
+   and Apple Calendar (public/shared calendar link) addresses work the same way.
+4. Check it: **Refresh Summary** in the web UI should list the next seven days, and
+   `pytest -m live -rs` runs the live calendar test.
+
+Treat the secret address like a password: anyone with it can read that calendar. If it leaks,
+use **Reset** next to it in Google Calendar and update `.env`.

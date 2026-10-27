@@ -48,11 +48,11 @@ def player(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def no_google(monkeypatch):
-    """Default: no Google token stored, so the calendar returns no events."""
-    monkeypatch.setattr(
-        calendar_summary_service.google_service, "get_weekly_events", AsyncMock(return_value=[])
-    )
+def calendar(monkeypatch):
+    """Stub the calendar feed; tests set `.return_value` to supply events."""
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr(calendar_summary_service, "fetch_events", fetch)
+    return fetch
 
 
 @pytest.fixture

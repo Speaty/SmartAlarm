@@ -12,9 +12,8 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{DATA_DIR / 'smartalarm.db'}")
-GOOGLE_CLIENT_SECRETS = BASE_DIR.parent / "secrets" / "google_client_secrets.json"
-GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme_local_secret")
+# Comma-separated secret iCal feed URLs (Google: Settings > your calendar > Integrate calendar)
+CALENDAR_ICAL_URLS = [u.strip() for u in os.getenv("CALENDAR_ICAL_URLS", "").split(",") if u.strip()]
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
 DEFAULT_ALARM_VOLUME = int(os.getenv("DEFAULT_ALARM_VOLUME", "70"))

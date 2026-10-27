@@ -2,16 +2,14 @@ from typing import List
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from .config import DATA_DIR, SECRET_KEY, FRONTEND_DIR
+from .config import DATA_DIR, FRONTEND_DIR
 from .database import async_session, engine
 from .models import Alarm, Base as ORMBase
 from .scheduler import start_scheduler, schedule_alarm, remove_alarm_job
-from .auth_routes import router as oauth_router
 from .schemas import AlarmCreate, AlarmRead, AlarmUpdate, VolumeSet
 from .alarm_controller import (
     stop_alarm,
@@ -32,8 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-app.include_router(oauth_router, prefix="/oauth")
 app.include_router(calendar_admin_router)
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 

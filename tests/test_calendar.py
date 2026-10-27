@@ -1,27 +1,178 @@
-import json
-import sqlite3
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 import requests
-from google.oauth2.credentials import Credentials
 
-from backend import google_calendar
-from backend.calendar_summary import CalendarSummaryService, calendar_summary_service
-from backend.calendar_sync import get_weekly_google_events, summarize_events
-from backend.google_calendar import GoogleCalendarService
-from backend.token_store import get_token, save_token
+from backend import calendar_sync
+from backend.calendar_summary import CalendarSummaryService
+from backend.calendar_sync import download_feed, get_weekly_events, summarize_events
 from tests.fakes import FakeResponse, RecordingHTTP
 
-EVENTS = [
-    {"start": {"dateTime": "2099-01-05T09:00:00Z"}, "summary": "Standup"},
-    {"start": {"date": "2099-01-06"}, "summary": "Holiday"},
-]
+LONDON = ZoneInfo("Europe/London")
+NOW = datetime(2099, 1, 5, 8, 0, tzinfo=LONDON)  # Monday 08:00
 
 
-# --- summarize_events -------------------------------------------------------
+def feed(*events: str) -> bytes:
+    body = "".join(f"BEGIN:VEVENT\r\n{e.strip()}\r\nEND:VEVENT\r\n" for e in events)
+    return (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\n" + body + "END:VCALENDAR\r\n"
+    ).encode()
+
+
+def vevent(uid, summary, dtstart, extra=""):
+    lines = [f"UID:{uid}", f"SUMMARY:{summary}", dtstart, "DTSTAMP:20990101T000000Z"]
+    if extra:
+        lines.append(extra)
+    return "\r\n".join(lines)
+
+
+STANDUP = vevent("1", "Standup", "DTSTART:20990105T090000Z")
+HOLIDAY = vevent("2", "Holiday", "DTSTART;VALUE=DATE:20990106")
+GYM_WEEKLY = vevent(
+    "3", "Gym", "DTSTART;TZID=Europe/London:20981202T180000", "RRULE:FREQ=WEEKLY"
+)  # Tuesdays
+NEW_YORK_CALL = vevent("4", "NY call", "DTSTART;TZID=America/New_York:20990107T090000")
+FLOATING = vevent("5", "Dentist", "DTSTART:20990108T070000")
+YESTERDAY = vevent("6", "Past", "DTSTART:20990104T090000Z")
+NEXT_MONTH = vevent("7", "Later", "DTSTART:20990201T090000Z")
+
+
+@pytest.fixture
+def feeds(monkeypatch):
+    """Serve iCal feeds by URL instead of hitting the network."""
+    served = {}
+
+    def fake_download(url):
+        return served[url]
+
+    monkeypatch.setattr(calendar_sync, "download_feed", fake_download)
+    return served
+
+
+def summaries(events):
+    return [e["summary"] for e in events]
+
+
+# --- parsing the next seven days ---------------------------------------------
+
+
+async def test_timed_event_is_returned_in_local_time(feeds):
+    feeds["u"] = feed(STANDUP)
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert events == [{"start": {"dateTime": "2099-01-05T09:00:00+00:00"}, "summary": "Standup"}]
+
+
+async def test_all_day_event_uses_date(feeds):
+    feeds["u"] = feed(HOLIDAY)
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert events == [{"start": {"date": "2099-01-06"}, "summary": "Holiday"}]
+
+
+async def test_weekly_recurring_event_expands_to_this_weeks_occurrence(feeds):
+    feeds["u"] = feed(GYM_WEEKLY)
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert events == [{"start": {"dateTime": "2099-01-06T18:00:00+00:00"}, "summary": "Gym"}]
+
+
+async def test_event_in_other_timezone_is_converted_to_local(feeds):
+    feeds["u"] = feed(NEW_YORK_CALL)
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert events[0]["start"]["dateTime"] == "2099-01-07T14:00:00+00:00"
+
+
+async def test_floating_time_is_treated_as_local(feeds):
+    feeds["u"] = feed(FLOATING)
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert events[0]["start"]["dateTime"] == "2099-01-08T07:00:00+00:00"
+
+
+async def test_events_outside_the_week_are_excluded(feeds):
+    feeds["u"] = feed(YESTERDAY, STANDUP, NEXT_MONTH)
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert summaries(events) == ["Standup"]
+
+
+async def test_untitled_event(feeds):
+    feeds["u"] = feed("UID:9\r\nDTSTART:20990105T120000Z\r\nDTSTAMP:20990101T000000Z")
+
+    events = await get_weekly_events(["u"], now=NOW)
+
+    assert summaries(events) == ["Untitled event"]
+
+
+async def test_multiple_feeds_are_merged_and_sorted(feeds):
+    feeds["work"] = feed(NEW_YORK_CALL, STANDUP)  # Thu, Mon
+    feeds["home"] = feed(HOLIDAY, GYM_WEEKLY)  # Tue all-day, Tue 18:00
+
+    events = await get_weekly_events(["work", "home"], now=NOW)
+
+    assert summaries(events) == ["Standup", "Holiday", "Gym", "NY call"]
+
+
+async def test_no_feeds_configured_returns_none(feeds):
+    assert await get_weekly_events([], now=NOW) is None
+
+
+async def test_uses_configured_urls_by_default(feeds, monkeypatch):
+    monkeypatch.setattr(calendar_sync, "CALENDAR_ICAL_URLS", ["configured"])
+    feeds["configured"] = feed(STANDUP)
+
+    events = await get_weekly_events(now=NOW)
+
+    assert summaries(events) == ["Standup"]
+
+
+async def test_bad_feed_raises(feeds):
+    feeds["u"] = b"<html>not a calendar</html>"
+
+    with pytest.raises(ValueError):
+        await get_weekly_events(["u"], now=NOW)
+
+
+# --- downloading --------------------------------------------------------------
+
+
+def test_download_returns_body_with_timeout(monkeypatch):
+    get = RecordingHTTP(FakeResponse(content=b"ICS"))
+    monkeypatch.setattr(requests, "get", get)
+
+    assert download_feed("https://example.com/basic.ics") == b"ICS"
+    url, kwargs = get.calls[0]
+    assert url == "https://example.com/basic.ics"
+    assert kwargs["timeout"] > 0
+
+
+def test_download_rewrites_webcal_to_https(monkeypatch):
+    get = RecordingHTTP(FakeResponse(content=b"ICS"))
+    monkeypatch.setattr(requests, "get", get)
+
+    download_feed("webcal://example.com/basic.ics")
+
+    assert get.calls[0][0] == "https://example.com/basic.ics"
+
+
+def test_download_raises_on_http_error(monkeypatch):
+    monkeypatch.setattr(requests, "get", RecordingHTTP(FakeResponse(status_code=404)))
+
+    with pytest.raises(requests.HTTPError):
+        download_feed("https://example.com/basic.ics")
+
+
+# --- summarize_events -----------------------------------------------------------
 
 
 def test_summary_with_no_events():
@@ -29,10 +180,15 @@ def test_summary_with_no_events():
 
 
 def test_summary_lists_events_with_start_times():
-    text = summarize_events(EVENTS)
+    text = summarize_events(
+        [
+            {"start": {"dateTime": "2099-01-05T09:00:00+00:00"}, "summary": "Standup"},
+            {"start": {"date": "2099-01-06"}, "summary": "Holiday"},
+        ]
+    )
 
-    assert "2099-01-05T09:00:00Z: Standup" in text
-    assert "2099-01-06: Holiday" in text  # all-day events use `date`
+    assert "2099-01-05T09:00:00+00:00: Standup" in text
+    assert "2099-01-06: Holiday" in text
 
 
 def test_summary_caps_at_five_events():
@@ -44,185 +200,61 @@ def test_summary_caps_at_five_events():
     assert "E5" not in text
 
 
-def test_summary_handles_untitled_event():
-    assert "Untitled event" in summarize_events([{"start": {"date": "2099-01-01"}}])
+# --- CalendarSummaryService (caching / fallback) ----------------------------------
 
-
-# --- Google Calendar HTTP fetch ---------------------------------------------
-
-
-async def test_google_fetch_requests_next_seven_days(monkeypatch):
-    get = RecordingHTTP(FakeResponse(json_data={"items": EVENTS}))
-    monkeypatch.setattr(requests, "get", get)
-
-    events = await get_weekly_google_events(Credentials(token="access-1"))
-
-    assert events == EVENTS
-    url, kwargs = get.calls[0]
-    assert url == "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-    assert kwargs["headers"]["Authorization"] == "Bearer access-1"
-    params = kwargs["params"]
-    assert params["singleEvents"] == "true"
-    assert params["orderBy"] == "startTime"
-    start = datetime.fromisoformat(params["timeMin"].rstrip("Z"))
-    end = datetime.fromisoformat(params["timeMax"].rstrip("Z"))
-    assert end - start == timedelta(days=7)
-
-
-async def test_google_fetch_with_no_items_returns_empty(monkeypatch):
-    monkeypatch.setattr(requests, "get", RecordingHTTP(FakeResponse(json_data={})))
-
-    assert await get_weekly_google_events(Credentials(token="t")) == []
-
-
-async def test_google_fetch_raises_on_http_error(monkeypatch):
-    monkeypatch.setattr(requests, "get", RecordingHTTP(FakeResponse(status_code=401)))
-
-    with pytest.raises(requests.HTTPError):
-        await get_weekly_google_events(Credentials(token="t"))
-
-
-# --- GoogleCalendarService (token handling) ---------------------------------
+A = [{"start": {"date": "2099-01-01"}, "summary": "First"}]
+B = [{"start": {"date": "2099-01-01"}, "summary": "Second"}]
 
 
 @pytest.fixture
-def service(tmp_path):
-    secrets = tmp_path / "client_secrets.json"
-    secrets.write_text(json.dumps({"installed": {"client_id": "cid", "client_secret": "csecret"}}))
-    svc = GoogleCalendarService()
-    svc.client_secrets_file = secrets
-    return svc
-
-
-@pytest.fixture
-def fetched(monkeypatch):
-    """Capture the credentials the service fetches events with."""
-    seen = []
-
-    async def fake_fetch(creds):
-        seen.append(creds)
-        return EVENTS
-
-    monkeypatch.setattr(google_calendar, "get_weekly_google_events", fake_fetch)
-    return seen
-
-
-async def test_service_without_stored_token_returns_no_events(service, fetched):
-    assert await service.get_weekly_events() == []
-    assert fetched == []
-
-
-async def test_service_uses_stored_token(service, fetched):
-    await save_token("google", "access-1", "refresh-1", "scope", datetime.utcnow() + timedelta(hours=1))
-
-    events = await service.get_weekly_events()
-
-    assert events == EVENTS
-    assert fetched[0].token == "access-1"
-    assert fetched[0].client_id == "cid"
-
-
-async def test_service_refreshes_expired_token_and_stores_it(service, fetched, monkeypatch):
-    await save_token("google", "stale", "refresh-1", "scope", datetime.utcnow() - timedelta(minutes=5))
-    new_expiry = datetime.utcnow() + timedelta(hours=1)
-
-    def fake_refresh(self, request):
-        self.token = "fresh"
-        self.expiry = new_expiry
-
-    monkeypatch.setattr(Credentials, "refresh", fake_refresh)
-
-    await service.get_weekly_events()
-
-    assert fetched[0].token == "fresh"
-    stored = await get_token("google")
-    assert stored.access_token == "fresh"
-    assert stored.refresh_token == "refresh-1"
-    assert stored.expires_at == new_expiry
-
-
-async def test_service_does_not_refresh_valid_token(service, fetched, monkeypatch):
-    await save_token("google", "access-1", "refresh-1", "scope", datetime.utcnow() + timedelta(hours=1))
-    refresh = AsyncMock()
-    monkeypatch.setattr(Credentials, "refresh", lambda self, request: refresh())
-
-    await service.get_weekly_events()
-
-    refresh.assert_not_called()
-
-
-async def test_service_missing_client_secrets_raises(service):
-    await save_token("google", "a", "r", "scope")
-    service.client_secrets_file = Path("does/not/exist.json")
-
-    with pytest.raises(FileNotFoundError):
-        await service.get_weekly_events()
-
-
-async def test_save_token_updates_existing_row():
-    await save_token("google", "a1", "r1", "s")
-    await save_token("google", "a2", "r2", "s")
-
-    stored = await get_token("google")
-    assert (stored.access_token, stored.refresh_token) == ("a2", "r2")
-
-
-# --- CalendarSummaryService (caching / fallback) ----------------------------
-
-
-@pytest.fixture
-def summary_service():
+def service():
     svc = CalendarSummaryService()
-    svc.google_service = AsyncMock()
+    svc.fetch_events = AsyncMock()
     return svc
 
 
-async def test_summary_service_fetches_fresh_events(summary_service):
-    summary_service.google_service.get_weekly_events.return_value = EVENTS
+async def test_service_refreshes_every_time(service):
+    service.fetch_events.side_effect = [A, B]
 
-    assert "Standup" in await summary_service.get_summary()
+    await service.get_summary()
 
-
-async def test_summary_service_refreshes_every_time(summary_service):
-    summary_service.google_service.get_weekly_events.side_effect = [
-        [{"start": {"date": "2099-01-01"}, "summary": "First"}],
-        [{"start": {"date": "2099-01-01"}, "summary": "Second"}],
-    ]
-
-    await summary_service.get_summary()
-
-    assert "Second" in await summary_service.get_summary()
+    assert "Second" in await service.get_summary()
 
 
-async def test_summary_service_falls_back_to_cache_when_google_fails(summary_service):
-    summary_service.google_service.get_weekly_events.side_effect = [
-        EVENTS,
-        requests.ConnectionError("offline"),
-    ]
-    await summary_service.get_summary()
+async def test_service_falls_back_to_cache_when_fetch_fails(service):
+    service.fetch_events.side_effect = [A, requests.ConnectionError("offline")]
+    await service.get_summary()
 
-    assert "Standup" in await summary_service.get_summary()
+    assert "First" in await service.get_summary()
 
 
-async def test_summary_service_keeps_cache_when_google_returns_nothing(summary_service):
-    summary_service.google_service.get_weekly_events.side_effect = [EVENTS, []]
-    await summary_service.get_summary()
+async def test_service_keeps_cache_when_no_feed_configured(service):
+    service.events = A
+    service.fetch_events.return_value = None
 
-    assert "Standup" in await summary_service.get_summary()
-
-
-# --- HTTP endpoints ----------------------------------------------------------
+    assert "First" in await service.get_summary()
 
 
-async def test_calendar_summary_endpoint(client):
-    calendar_summary_service.google_service.get_weekly_events.return_value = EVENTS
+async def test_service_empty_week_replaces_cache(service):
+    service.fetch_events.side_effect = [A, []]
+    await service.get_summary()
+
+    assert "no events" in await service.get_summary()
+
+
+# --- HTTP endpoints ---------------------------------------------------------------
+
+
+async def test_calendar_summary_endpoint(client, calendar):
+    calendar.return_value = A
 
     response = await client.get("/calendar/summary")
 
-    assert "Standup" in response.json()["summary"]
+    assert "First" in response.json()["summary"]
 
 
-async def test_sample_events_endpoint_feeds_summary(client):
+async def test_sample_events_endpoint_feeds_summary_when_no_feed_configured(client, calendar):
+    calendar.return_value = None
     await client.post("/calendar/events/sample")
 
     response = await client.get("/calendar/summary")
@@ -230,28 +262,17 @@ async def test_sample_events_endpoint_feeds_summary(client):
     assert "Morning standup" in response.json()["summary"]
 
 
-# --- Live --------------------------------------------------------------------
+# --- Live -------------------------------------------------------------------------
 
 
 @pytest.mark.live
-async def test_live_google_calendar_fetch():
-    real_db = Path(__file__).resolve().parent.parent / "data" / "smartalarm.db"
-    service = GoogleCalendarService()
-    if not service.client_secrets_file.exists() or not real_db.exists():
-        pytest.skip("needs secrets/google_client_secrets.json and a connected data/smartalarm.db")
-    with sqlite3.connect(real_db) as conn:
-        row = conn.execute(
-            "SELECT access_token, refresh_token, scopes, expires_at FROM oauth_tokens "
-            "WHERE provider = 'google'"
-        ).fetchone()
-    if not row:
-        pytest.skip("connect Google Calendar via /oauth/auth/google first")
-    expires_at = datetime.fromisoformat(row[3]) if row[3] else None
-    await save_token("google", row[0], row[1], row[2], expires_at)
+async def test_live_ical_feed():
+    if not calendar_sync.CALENDAR_ICAL_URLS:
+        pytest.skip("set CALENDAR_ICAL_URLS in .env to run")
 
-    events = await service.get_weekly_events()
+    events = await get_weekly_events()
 
     assert isinstance(events, list)
     for event in events:
-        assert "start" in event
+        assert event["start"].get("dateTime") or event["start"].get("date")
     print(summarize_events(events))
