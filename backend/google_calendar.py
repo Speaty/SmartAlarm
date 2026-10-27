@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, Tuple
@@ -67,7 +68,7 @@ class GoogleCalendarService:
             scopes=token.scopes.split(",") if token.scopes else GOOGLE_SCOPES,
         )
         if creds.expired and creds.refresh_token:
-            creds.refresh(GoogleRequest())
+            await asyncio.to_thread(creds.refresh, GoogleRequest())
             await self.store_credentials(creds)
         events = await get_weekly_google_events(creds)
         return events

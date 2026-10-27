@@ -92,6 +92,7 @@ venv/
 data/*.db
 tmp/
 .secrets/
+secrets/
 
 # local config
 .env

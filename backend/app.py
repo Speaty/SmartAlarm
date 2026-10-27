@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import FileResponse
@@ -10,10 +10,17 @@ from sqlalchemy import select
 from .config import DATA_DIR, SECRET_KEY, FRONTEND_DIR
 from .database import async_session, engine
 from .models import Alarm, Base as ORMBase
-from .scheduler import start_scheduler, schedule_alarm, remove_alarm_job, reload_alarms
+from .scheduler import start_scheduler, schedule_alarm, remove_alarm_job
 from .auth_routes import router as oauth_router
 from .schemas import AlarmCreate, AlarmRead, AlarmUpdate, VolumeSet
-from .alarm_controller import stop_alarm, play_schedule_summary, test_speakers, get_volume, set_volume
+from .alarm_controller import (
+    stop_alarm,
+    play_schedule_summary,
+    test_speakers,
+    stop_test,
+    get_volume,
+    set_volume,
+)
 from .calendar_summary import calendar_summary_service
 from .calendar_admin import router as calendar_admin_router
 
@@ -38,7 +45,7 @@ async def startup_event():
     start_scheduler()
 
 
-@app.get("/alarms")
+@app.get("/alarms", response_model=List[AlarmRead])
 async def list_alarms():
     async with async_session() as session:
         result = await session.execute(select(Alarm))
@@ -49,7 +56,7 @@ async def list_alarms():
 @app.post("/alarms", response_model=AlarmRead)
 async def create_alarm(payload: AlarmCreate):
     async with async_session() as session:
-        alarm = Alarm(**payload.dict())
+        alarm = Alarm(**payload.model_dump())
         session.add(alarm)
         await session.commit()
         await session.refresh(alarm)
@@ -63,11 +70,13 @@ async def update_alarm(alarm_id: int, payload: AlarmUpdate):
         alarm = await session.get(Alarm, alarm_id)
         if not alarm:
             raise HTTPException(status_code=404, detail="Alarm not found")
-        for key, value in payload.dict(exclude_none=True).items():
+        for key, value in payload.model_dump(exclude_unset=True).items():
+            if value is None:
+                raise HTTPException(status_code=422, detail=f"{key} cannot be null")
             setattr(alarm, key, value)
         await session.commit()
         await session.refresh(alarm)
-    await reload_alarms()
+    schedule_alarm(alarm)
     return alarm
 
 
@@ -84,15 +93,16 @@ async def delete_alarm(alarm_id: int):
 
 
 @app.post("/alarm/stop")
-async def api_stop_alarm():
-    await stop_alarm()
-    return {"status": "stopped"}
+async def api_stop_alarm(background_tasks: BackgroundTasks):
+    was_ringing = await stop_alarm()
+    if was_ringing:
+        background_tasks.add_task(play_schedule_summary)
+    return {"status": "stopped", "summary_playing": was_ringing}
 
 
 @app.post("/alarm/summary")
 async def api_alarm_summary():
-    summary = []
-    await play_schedule_summary(summary)
+    await play_schedule_summary()
     return {"status": "summary_playing"}
 
 
@@ -102,6 +112,12 @@ async def api_test_speakers():
 
     await test_speakers(TEST_SPEAKER_URL)
     return {"status": "test_speakers_playing", "url": TEST_SPEAKER_URL}
+
+
+@app.post("/alarm/test-speakers/stop")
+async def api_stop_test_speakers():
+    await stop_test()
+    return {"status": "stopped"}
 
 
 @app.get("/volume")

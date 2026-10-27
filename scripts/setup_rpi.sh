@@ -6,7 +6,7 @@ sudo useradd -m -s /bin/bash smartalarm 2>/dev/null || true
 sudo usermod -aG audio,gpio smartalarm
 
 echo "Checking audio devices..."
-aplay -l
+wpctl status
 
 echo "If using HiFiBerry AMP4, ensure it is configured in /boot/config.txt and rebooted."
 

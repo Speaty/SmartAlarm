@@ -14,7 +14,7 @@ class TTSEngine:
         self.voice_id = ELEVENLABS_VOICE_ID
 
     def is_configured(self) -> bool:
-        return self.api_key is not None
+        return bool(self.api_key)
 
     def synthesize(self, text: str, file_path: Path) -> Path:
         if not self.is_configured():
@@ -29,7 +29,7 @@ class TTSEngine:
             "text": text,
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
         }
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         file_path.write_bytes(response.content)
         return file_path

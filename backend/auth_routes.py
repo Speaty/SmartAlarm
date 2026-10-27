@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -24,7 +26,7 @@ async def auth_google_callback(request: Request):
     state = request.query_params.get("state")
     redirect_uri = str(request.url_for("auth_google_callback"))
     flow = google_service.build_flow(redirect_uri, state)
-    flow.fetch_token(authorization_response=str(request.url))
+    await asyncio.to_thread(flow.fetch_token, authorization_response=str(request.url))
     credentials = flow.credentials
     await google_service.store_credentials(credentials)
     return {"status": "ok", "message": "Google Calendar connected."}

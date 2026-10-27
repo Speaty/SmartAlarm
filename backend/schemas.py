@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class VolumeSet(BaseModel):
@@ -16,13 +16,15 @@ class AlarmCreate(BaseModel):
 
 
 class AlarmUpdate(BaseModel):
-    label: Optional[str]
-    scheduled_at: Optional[datetime]
-    enabled: Optional[bool]
-    repeat_weekly: Optional[bool]
+    label: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    enabled: Optional[bool] = None
+    repeat_weekly: Optional[bool] = None
 
 
 class AlarmRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     label: str
     scheduled_at: datetime
@@ -30,6 +32,3 @@ class AlarmRead(BaseModel):
     repeat_weekly: bool
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
-
-    class Config:
-        orm_mode = True

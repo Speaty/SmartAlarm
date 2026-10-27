@@ -6,7 +6,7 @@ SmartAlarmPi is a Raspberry Pi smart alarm clock backend and lightweight web UI.
 - Schedule weekly or one-time alarms via a simple web UI
 - Play internet radio as the alarm source
 - Generate spoken messages via `espeak-ng` now, and later ElevenLabs TTS
-- Provide hooks for Google Calendar and Outlook integration
+- Read your Google Calendar and speak a weekly summary when you stop the alarm (Outlook planned)
 - Run as a local Pi service with HiFiBerry audio support
 
 ## Getting started
@@ -15,7 +15,7 @@ SmartAlarmPi is a Raspberry Pi smart alarm clock backend and lightweight web UI.
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng alsa-utils
+sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng pipewire pipewire-pulse pipewire-bin wireplumber
 ```
 
 2. Install Python dependencies
@@ -50,7 +50,7 @@ http://localhost:5000/
 ## Notes
 
 - The current MVP uses `espeak-ng` for local TTS.
-- Media playback uses `mpg123` for internet radio and `aplay` for WAV audio.
+- Media playback goes through PipeWire: `mpg123 -o pulse` for internet radio, `pw-play` for WAV audio, and `wpctl` for volume.
 - For Raspberry Pi deployment, add the `smartalarm` user to `audio` and `gpio` groups.
 
 ## Google Calendar setup

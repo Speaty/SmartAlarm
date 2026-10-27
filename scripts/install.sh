@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo "Installing system dependencies..."
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng alsa-utils
+sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng pipewire pipewire-pulse pipewire-bin wireplumber
 
 if python3 -m venv venv 2>/dev/null; then
   source venv/bin/activate
