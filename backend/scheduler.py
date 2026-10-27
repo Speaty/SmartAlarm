@@ -8,7 +8,7 @@ from sqlalchemy import select
 from .alarm_controller import trigger_alarm
 from .config import TIMEZONE
 from .database import async_session
-from .models import Alarm
+from .models import Alarm, DayAlarm
 
 scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
@@ -50,13 +50,34 @@ def schedule_alarm(alarm: Alarm):
     )
 
 
+def schedule_day(day: DayAlarm):
+    """Schedule the weekly alarm for one day, replacing any existing job. Disabled days are unscheduled."""
+    job_id = f"day-{day.weekday}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+    if not day.enabled:
+        return
+
+    trigger = CronTrigger(
+        day_of_week=day.weekday,
+        hour=day.time.hour,
+        minute=day.time.minute,
+        timezone=TIMEZONE,
+    )
+    scheduler.add_job(day_alarm_handler, trigger, args=[day.weekday], id=job_id, replace_existing=True)
+
+
 async def load_alarms():
     async with async_session() as session:
         result = await session.execute(select(Alarm).where(Alarm.enabled == True))
         alarms = result.scalars().all()
+        result = await session.execute(select(DayAlarm).where(DayAlarm.enabled == True))
+        days = result.scalars().all()
 
     for alarm in alarms:
         schedule_alarm(alarm)
+    for day in days:
+        schedule_day(day)
 
 
 def remove_alarm_job(alarm_id: int):
@@ -70,6 +91,12 @@ async def alarm_handler(alarm_id: int, label: str, repeat_weekly: bool = True):
         await disable_alarm(alarm_id)
     await trigger_alarm(
         f"Alarm {label} is ringing. Tap the stop button to dismiss and hear your schedule summary."
+    )
+
+
+async def day_alarm_handler(weekday: int):
+    await trigger_alarm(
+        "Good morning. Tap the stop button to dismiss and hear your schedule summary."
     )
 
 

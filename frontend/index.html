@@ -14,49 +14,65 @@
     input, select { width: 100%; border-radius: 0.75rem; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; padding: 0.85rem; margin-top: 0.5rem; }
     input[type=range] { padding: 0.4rem 0; border: none; background: transparent; cursor: pointer; accent-color: #2563eb; }
     .row { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); }
+    .hint { color: #94a3b8; font-size: 0.9rem; margin-top: 0; }
+    .day { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 1rem; padding: 0.6rem 0; border-bottom: 1px solid #1f2937; }
+    .day:last-of-type { border-bottom: none; }
+    .day-name { font-weight: 600; }
+    .day.off .day-name, .day.off .day-time { opacity: 0.45; }
+    input.day-time { width: auto; margin-top: 0; padding: 0.5rem 0.75rem; color-scheme: dark; }
+    .switch { position: relative; display: inline-block; width: 3rem; height: 1.7rem; }
+    .switch input { opacity: 0; width: 0; height: 0; margin: 0; padding: 0; }
+    .slider { position: absolute; inset: 0; background: #475569; border-radius: 999px; cursor: pointer; transition: background 0.2s; }
+    .slider::before { content: ""; position: absolute; width: 1.3rem; height: 1.3rem; left: 0.2rem; top: 0.2rem; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+    .switch input:checked + .slider { background: #2563eb; }
+    .switch input:checked + .slider::before { transform: translateX(1.3rem); }
+    .switch input:focus-visible + .slider { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    .alarm-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0; border-bottom: 1px solid #1f2937; }
+    .alarm-item:last-of-type { border-bottom: none; }
   </style>
 </head>
 <body x-data="alarmApp()">
   <div class="page">
     <h1>SmartAlarmPi</h1>
     <section class="card">
-      <h2>Create Alarm</h2>
-      <div class="row">
-        <label>
-          Label
-          <input type="text" x-model="form.label" />
-        </label>
-        <label>
-          Date & time
-          <input type="datetime-local" x-model="form.scheduled_at" />
-        </label>
-        <label>
-          Repeat weekly
-          <select x-model="form.repeat_weekly">
-            <option :value="true">Yes</option>
-            <option :value="false">No</option>
-          </select>
-        </label>
-      </div>
-      <button @click="createAlarm()">Save Alarm</button>
-      <p x-text="message"></p>
+      <h2>Weekly Alarms</h2>
+      <p class="hint">Days that are on ring every week at their time.</p>
+      <template x-for="day in week" :key="day.weekday">
+        <div class="day" :class="{ off: !day.enabled }">
+          <span class="day-name" x-text="day.day"></span>
+          <input type="time" class="day-time" x-model="day.time" @change="saveDay(day, { time: day.time })" :aria-label="day.day + ' alarm time'" />
+          <label class="switch">
+            <input type="checkbox" x-model="day.enabled" @change="saveDay(day, { enabled: day.enabled })" :aria-label="day.day + ' alarm on'" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </template>
+      <p x-text="weekMessage"></p>
     </section>
 
     <section class="card">
-      <h2>Alarms</h2>
-      <template x-if="alarms.length">
-        <div>
-            <template x-for="alarm in alarms" :key="alarm.id">
-              <div class="card" style="background:#1f2937;">
-                <strong x-text="alarm.label"></strong>
-                <p x-text="alarm.scheduled_at"></p>
-                <p>Enabled: <span x-text="alarm.enabled ? 'Yes' : 'No'"></span></p>
-                <button @click="deleteAlarm(alarm.id)" class="secondary">Delete</button>
-              </div>
-            </template>
+      <h2>One-off Alarms</h2>
+      <div class="row">
+        <label>
+          Label
+          <input type="text" x-model="oneOff.label" />
+        </label>
+        <label>
+          Date & time
+          <input type="datetime-local" x-model="oneOff.scheduled_at" />
+        </label>
+      </div>
+      <button @click="createOneOff()" style="margin-top: 1rem;">Add Alarm</button>
+      <p x-text="message"></p>
+      <template x-for="alarm in alarms.filter(a => a.enabled)" :key="alarm.id">
+        <div class="alarm-item">
+          <div>
+            <strong x-text="alarm.label"></strong>
+            <div class="hint" x-text="formatAlarm(alarm)"></div>
+          </div>
+          <button @click="deleteAlarm(alarm.id)" class="secondary">Delete</button>
         </div>
       </template>
-      <p x-show="!alarms.length">No alarms yet.</p>
     </section>
 
     <section class="card">
@@ -96,29 +112,70 @@
   </div>
 
   <script>
+    // Local "YYYY-MM-DDTHH:MM" for tomorrow 07:00, the format datetime-local inputs use.
+    function tomorrowAt7() {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T07:00`;
+    }
+
     function alarmApp() {
       return {
         alarms: [],
+        week: [],
         message: '',
+        weekMessage: '',
         controlMessage: '',
         levels: { volume: 70, music: 100, voice: 100 },
-        form: { label: 'Morning', scheduled_at: new Date().toISOString().slice(0,16), repeat_weekly: true },
+        oneOff: { label: 'Alarm', scheduled_at: tomorrowAt7() },
+        async fetchWeek() {
+          const res = await fetch('/schedule');
+          if (res.ok) {
+            this.week = await res.json();
+          }
+        },
+        async saveDay(day, change) {
+          const res = await fetch(`/schedule/${day.weekday}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(change),
+          });
+          if (res.ok) {
+            const saved = await res.json();
+            Object.assign(day, saved);
+            this.weekMessage = saved.enabled ? `${saved.day} alarm on at ${saved.time}.` : `${saved.day} alarm off.`;
+          } else {
+            this.weekMessage = `Couldn't save ${day.day}.`;
+            this.fetchWeek();
+          }
+        },
         async fetchAlarms() {
           const res = await fetch('/alarms');
           this.alarms = await res.json();
         },
-        async createAlarm() {
+        formatAlarm(alarm) {
+          const when = new Date(alarm.scheduled_at).toLocaleString([], {
+            weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+          });
+          return alarm.repeat_weekly ? `${when} (repeats weekly)` : when;
+        },
+        async createOneOff() {
+          if (!this.oneOff.scheduled_at || new Date(this.oneOff.scheduled_at) <= new Date()) {
+            this.message = 'Pick a time in the future.';
+            return;
+          }
           const res = await fetch('/alarms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(this.form),
+            body: JSON.stringify({ ...this.oneOff, repeat_weekly: false }),
           });
           if (res.ok) {
-            this.message = 'Alarm created';
-            this.form = { label: 'Morning', scheduled_at: new Date().toISOString().slice(0,16), repeat_weekly: true };
+            this.message = 'Alarm added.';
+            this.oneOff = { label: 'Alarm', scheduled_at: tomorrowAt7() };
             this.fetchAlarms();
           } else {
-            this.message = 'Failed to create alarm';
+            this.message = 'Failed to add alarm.';
           }
         },
         async deleteAlarm(id) {
@@ -176,6 +233,7 @@
           }
         },
         init() {
+          this.fetchWeek();
           this.fetchAlarms();
           this.fetchLevels();
           this.fetchCalendarSummary();

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time as TimeOfDay
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +10,18 @@ class VolumeSet(BaseModel):
     volume: Optional[int] = Field(None, ge=0, le=100)
     music: Optional[int] = Field(None, ge=0, le=100)
     voice: Optional[int] = Field(None, ge=0, le=100)
+
+
+class DayAlarmUpdate(BaseModel):
+    time: Optional[TimeOfDay] = None
+    enabled: Optional[bool] = None
+
+
+class DayAlarmRead(BaseModel):
+    weekday: int
+    day: str
+    time: str  # "HH:MM", local time
+    enabled: bool
 
 
 class AlarmCreate(BaseModel):

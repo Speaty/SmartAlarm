@@ -22,6 +22,7 @@ from .alarm_controller import (
 )
 from .calendar_summary import calendar_summary_service
 from .calendar_admin import router as calendar_admin_router
+from .week_schedule import router as week_schedule_router
 
 app = FastAPI(title="SmartAlarmPi")
 app.add_middleware(
@@ -32,6 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(calendar_admin_router)
+app.include_router(week_schedule_router)
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
