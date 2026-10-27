@@ -18,7 +18,13 @@ sudo apt update
 sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng pipewire pipewire-pulse pipewire-bin wireplumber
 ```
 
-2. Install Python dependencies
+2. Create a virtualenv and install Python dependencies:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
 3. Initialize the database:
 
@@ -26,32 +32,41 @@ sudo apt install -y python3 python3-venv python3-pip mpg123 espeak-ng pipewire p
 python scripts/init_db.py
 ```
 
-4. Run the backend:
+4. Install it as a service so it starts at boot and restarts after a crash:
 
 ```bash
 source venv/bin/activate
-uvicorn backend.app:app --host 0.0.0.0 --port 5000
+./scripts/install_service.sh
 ```
+
+   This installs a systemd *user* service (running as you, so it can reach your PipeWire audio)
+   and enables lingering so it starts without anyone logging in. Afterwards:
+
+   - Logs: `journalctl --user -u smartalarm -f`
+   - After `git pull`: `systemctl --user restart smartalarm`
+
+   For development you can instead run it in the foreground with
+   `uvicorn backend.app:app --host 0.0.0.0 --port 5000 --reload`
+   (stop the service first: `systemctl --user stop smartalarm`).
 
 5. Open the UI in your browser:
 
 ```
-http://localhost:5000/
+http://<pi-address>:5000/
 ```
 
 ## Project layout
 
 - `backend/` — FastAPI app, scheduler, audio and TTS helpers
 - `frontend/` — single-page alarm UI
-- `config/` — systemd service file and deployment configuration
-- `scripts/` — install and setup helpers
+- `scripts/` — install, service and setup helpers
 - `data/` — runtime SQLite databases and generated audio
 
 ## Notes
 
 - The current MVP uses `espeak-ng` for local TTS.
 - Media playback goes through PipeWire: `mpg123 -o pulse` for internet radio, `pw-play` for WAV audio, and `wpctl` for volume.
-- For Raspberry Pi deployment, add the `smartalarm` user to `audio` and `gpio` groups.
+- The service runs as your user, which needs to be in the `audio` group (the default Pi user is).
 
 ## Testing
 
