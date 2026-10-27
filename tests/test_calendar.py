@@ -175,29 +175,86 @@ def test_download_raises_on_http_error(monkeypatch):
 # --- summarize_events -----------------------------------------------------------
 
 
+def timed(iso, summary="Event"):
+    return {"start": {"dateTime": iso}, "summary": summary}
+
+
+def all_day(iso, summary="Event"):
+    return {"start": {"date": iso}, "summary": summary}
+
+
 def test_summary_with_no_events():
-    assert "no events" in summarize_events([])
+    assert "no events" in summarize_events([], now=NOW)
 
 
-def test_summary_lists_events_with_start_times():
+def test_summary_reads_each_event_as_a_sentence():
     text = summarize_events(
-        [
-            {"start": {"dateTime": "2099-01-05T09:00:00+00:00"}, "summary": "Standup"},
-            {"start": {"date": "2099-01-06"}, "summary": "Holiday"},
-        ]
+        [timed("2099-01-05T09:00:00+00:00", "Standup"), all_day("2099-01-06", "Holiday")], now=NOW
     )
 
-    assert "2099-01-05T09:00:00+00:00: Standup" in text
-    assert "2099-01-06: Holiday" in text
+    assert text == (
+        "Your upcoming schedule for the week is as follows: "
+        "Today at 9 AM: Standup. Tomorrow, all day: Holiday."
+    )
 
 
-def test_summary_caps_at_five_events():
-    events = [{"start": {"date": "2099-01-01"}, "summary": f"E{i}"} for i in range(8)]
+@pytest.mark.parametrize(
+    "iso,spoken",
+    [
+        ("2099-01-05T09:00:00+00:00", "Today at 9 AM"),
+        ("2099-01-06T13:30:00+00:00", "Tomorrow at 1:30 PM"),
+        ("2099-01-07T12:00:00+00:00", "Wednesday at 12 PM"),
+        ("2099-01-08T00:05:00+00:00", "Thursday at 12:05 AM"),
+        ("2099-01-11T18:00:00+00:00", "Sunday at 6 PM"),
+        ("2099-01-12T07:00:00+00:00", "Next Monday at 7 AM"),
+        ("2099-01-23T09:00:00+00:00", "Friday the 23rd of January at 9 AM"),
+    ],
+)
+def test_summary_describes_day_and_time_relative_to_today(iso, spoken):
+    assert f"{spoken}: Event." in summarize_events([timed(iso)], now=NOW)
 
-    text = summarize_events(events)
+
+def test_summary_converts_other_timezones_to_local():
+    text = summarize_events([timed("2099-01-05T09:00:00-05:00")], now=NOW)  # New York
+
+    assert "Today at 2 PM" in text
+
+
+def test_summary_treats_naive_times_as_local():
+    assert "Today at 9 AM" in summarize_events([timed("2099-01-05T09:00:00")], now=NOW)
+
+
+def test_summary_uses_local_time_in_british_summer_time():
+    summer_now = datetime(2099, 7, 6, 8, 0, tzinfo=LONDON)
+
+    text = summarize_events([timed("2099-07-06T09:00:00+00:00")], now=summer_now)
+
+    assert "Today at 10 AM" in text
+
+
+@pytest.mark.parametrize(
+    "day,expected",
+    [(1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (11, "11th"), (12, "12th"),
+     (13, "13th"), (21, "21st"), (22, "22nd"), (23, "23rd"), (31, "31st")],
+)
+def test_ordinals(day, expected):
+    from backend.calendar_sync import ordinal
+
+    assert ordinal(day) == expected
+
+
+def test_summary_caps_at_five_events_and_counts_the_rest():
+    events = [all_day("2099-01-06", f"E{i}") for i in range(8)]
+
+    text = summarize_events(events, now=NOW)
 
     assert "E4" in text
     assert "E5" not in text
+    assert text.endswith("And 3 more.")
+
+
+def test_summary_handles_untitled_event():
+    assert "Untitled event" in summarize_events([{"start": {"date": "2099-01-05"}}], now=NOW)
 
 
 # --- CalendarSummaryService (caching / fallback) ----------------------------------
